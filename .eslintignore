@@ -1,0 +1,10 @@
+# Build outputs
+main.js
+*.js.map
+
+# Dependencies
+node_modules/
+
+# Configuration files
+*.config.mjs
+version-bump.mjs

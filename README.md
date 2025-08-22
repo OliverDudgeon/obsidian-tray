@@ -4,6 +4,50 @@
 on system startup and run it in the background, adding global hotkeys and a tray menu to
 toggle window visibility and create quick notes from anywhere in your operating system.
 
+## Development
+
+This plugin is built with modern JavaScript and ES modules. To get started with development:
+
+### Prerequisites
+
+- Node.js (v16 or higher)
+- pnpm package manager
+
+### Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/dragonwocky/obsidian-tray.git
+cd obsidian-tray
+
+# Install dependencies
+pnpm install
+
+# Start development mode (watches for changes)
+pnpm dev
+
+# Build for production
+pnpm build
+```
+
+### Project Structure
+
+```
+src/
+├── core/           # Core functionality modules
+│   ├── hotkey-manager.js
+│   ├── system-shutdown.js
+│   ├── tray-manager.js
+│   └── window-manager.js
+├── ui/             # User interface components
+│   └── settings-tab.js
+├── utils/          # Utility functions
+│   ├── constants.js
+│   ├── logger.js
+│   └── platform.js
+└── main.js         # Main plugin class
+```
+
 ## Configuration
 
 ### Window management
@@ -47,13 +91,15 @@ Hotkeys can be assigned to the commands via Obsidian's built-in hotkey manager.
 ### Manual
 
 1. Download this repository.
-2. Copy it into your vault's `.obsidian/plugins` directory.
-3. In Obsidian, navigate to **Settings** → **Community plugins**.
-4. Press **Turn on community plugins** if you haven't already.
-5. Find `Tray` in the list of **Installed plugins** and toggle it on.
-6. Press the **⚙️** button beside the toggle you just used.
-7. Configure the plugin as you wish.
-8. You're done! 🎉
+2. Run `pnpm install` to install dependencies.
+3. Run `pnpm build` to build the plugin.
+4. Copy the built files (`main.js`, `manifest.json`, and `styles.css` if present) into your vault's `.obsidian/plugins/tray` directory.
+5. In Obsidian, navigate to **Settings** → **Community plugins**.
+6. Press **Turn on community plugins** if you haven't already.
+7. Find `Tray` in the list of **Installed plugins** and toggle it on.
+8. Press the **⚙️** button beside the toggle you just used.
+9. Configure the plugin as you wish.
+10. You're done! 🎉
 
 ## Disclaimer
 
