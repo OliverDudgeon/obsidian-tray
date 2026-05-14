@@ -2,7 +2,7 @@
  * Settings UI component
  */
 
-import { PluginSettingTab, Setting } from "obsidian";
+import { PluginSettingTab, Setting, App, moment } from "obsidian";
 import { getPlatformText } from "../utils/platform.js";
 import {
   ACCELERATOR_FORMAT,
@@ -12,10 +12,57 @@ import {
 } from "../utils/constants.js";
 import { replaceVaultName } from "../core/tray-manager.js";
 
-const keyToLabel = (key) => {
+// Define interfaces for our plugin types
+interface ObsidianApp {
+  vault: {
+    getName: () => string;
+  };
+}
+
+interface PluginSettings {
+  launchOnStartup?: boolean;
+  hideOnLaunch?: boolean;
+  runInBackground?: boolean;
+  hideTaskbarIcon?: boolean;
+  createTrayIcon?: boolean;
+  trayIconImage?: string;
+  trayIconTooltip?: string;
+  toggleWindowFocusHotkey?: string;
+  quickNoteLocation?: string;
+  quickNoteDateFormat?: string;
+  quickNoteHotkey?: string;
+  [key: string]: any; // Allow additional properties
+}
+
+interface TrayPlugin {
+  settings: PluginSettings;
+  app: ObsidianApp;
+  setLaunchOnStartup: () => void;
+  interceptWindowClose: () => void;
+  allowWindowClose: () => void;
+  hideTaskbarIcons: () => void;
+  showTaskbarIcons: () => void;
+  createTrayIcon: () => void;
+  registerHotkeys: () => void;
+  unregisterHotkeys: () => void;
+  saveSettings: () => Promise<void>;
+}
+
+interface SettingOption {
+  key: string;
+  desc?: string;
+  type: "toggle" | "text" | "hotkey" | "image" | "moment";
+  default?: any;
+  placeholder?: string;
+  postprocessor?: (value: any) => string;
+  onChange?: () => void;
+  onBeforeChange?: () => void;
+}
+
+const keyToLabel = (key: string): string => {
   // Platform-specific setting labels
   const platformText = getPlatformText();
-  const customLabels = {
+  const customLabels: Record<string, string> = {
     createTrayIcon: `Create ${platformText.iconTypeCapitalized}`,
     trayIconImage: `${platformText.iconTypeCapitalized} Image`,
     trayIconTooltip: `${platformText.iconTypeCapitalized} Tooltip`,
@@ -32,19 +79,21 @@ const keyToLabel = (key) => {
     key
       .slice(1)
       .split(/(?=[A-Z])/)
-      .map((word) => word.toLowerCase())
+      .map((word: string) => word.toLowerCase())
       .join(" ")
   );
 };
 
-const htmlToFragment = (html) =>
+const htmlToFragment = (html?: string): DocumentFragment =>
   document
     .createRange()
     .createContextualFragment((html ?? "").replace(/\s+/g, " "));
 
 export class SettingsTab extends PluginSettingTab {
-  constructor(app, plugin) {
-    super(app, plugin);
+  plugin: TrayPlugin;
+
+  constructor(app: App, plugin: TrayPlugin) {
+    super(app, plugin as any);
     this.plugin = plugin;
   }
 
@@ -148,7 +197,8 @@ export class SettingsTab extends PluginSettingTab {
           const updatePreview = () => {
             const value = this.plugin.settings[key];
             if (type === "image") {
-              previewEl.src = value || OBSIDIAN_BASE64_ICON;
+              const imgEl = previewEl as HTMLImageElement;
+              imgEl.src = value || OBSIDIAN_BASE64_ICON;
             } else {
               previewEl.textContent = postprocessor(
                 value || defaultValue || ""
@@ -250,7 +300,7 @@ export class SettingsTab extends PluginSettingTab {
         `,
         type: "text",
         default: "{{vault}} | Obsidian",
-        postprocessor: (value) => replaceVaultName(value, this.app),
+        postprocessor: (value: string) => replaceVaultName(value, this.app),
         onChange: () => this.plugin.createTrayIcon(),
       },
       {
@@ -276,9 +326,8 @@ export class SettingsTab extends PluginSettingTab {
         `,
         type: "moment",
         default: DEFAULT_DATE_FORMAT,
-        postprocessor: (value) => {
-          const { moment } = require("obsidian");
-          return moment().format(value || DEFAULT_DATE_FORMAT);
+        postprocessor: (value: string) => {
+          return (moment as any)().format(value || DEFAULT_DATE_FORMAT);
         },
       },
       {

@@ -2,8 +2,17 @@
  * Platform-specific utilities
  */
 
+interface PlatformText {
+  systemArea: string;
+  systemAreaCapitalized: string;
+  iconType: string;
+  iconTypeCapitalized: string;
+  taskbarDock: string;
+  taskbarDockCapitalized: string;
+}
+
 // Platform-specific terminology
-export const getPlatformText = () => {
+export const getPlatformText = (): PlatformText => {
   if (process.platform === "darwin") {
     return {
       systemArea: "menu bar",

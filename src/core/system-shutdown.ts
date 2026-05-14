@@ -5,15 +5,28 @@
 import { logger } from "../utils/logger.js";
 import { setQuittingFlag } from "./window-manager.js";
 
-let beforeQuitHandler, willQuitHandler, windowAllClosedHandler;
-let quitTimeoutId;
+// Electron API helper
+const getElectronApp = () => {
+  const { app } = globalThis.require("electron").remote;
+  return app;
+};
 
-export const handleSystemShutdown = () => {
+interface ElectronApp {
+  on: (event: string, listener: (event: Event) => void) => void;
+  removeListener: (event: string, listener: (event: Event) => void) => void;
+}
+
+let beforeQuitHandler: ((event: Event) => void) | null = null;
+let willQuitHandler: ((event: Event) => void) | null = null;
+let windowAllClosedHandler: ((event: Event) => void) | null = null;
+let quitTimeoutId: NodeJS.Timeout | null = null;
+
+export const handleSystemShutdown = (): void => {
   // On macOS, listen for system shutdown/restart/logout signals
   if (process.platform === "darwin") {
-    const { app } = require("electron").remote;
+    const app = getElectronApp();
 
-    beforeQuitHandler = (_event) => {
+    beforeQuitHandler = (_event: Event) => {
       logger.debug("System shutdown: before-quit event");
       // Set flag to allow window close
       setQuittingFlag(true);
@@ -32,7 +45,7 @@ export const handleSystemShutdown = () => {
     };
 
     // will-quit is more definitive - the app WILL quit after this
-    willQuitHandler = (_event) => {
+    willQuitHandler = (_event: Event) => {
       logger.debug("System shutdown: will-quit event");
       setQuittingFlag(true);
 
@@ -42,7 +55,7 @@ export const handleSystemShutdown = () => {
       }
     };
 
-    windowAllClosedHandler = (_event) => {
+    windowAllClosedHandler = (_event: Event) => {
       logger.debug("System shutdown: window-all-closed event");
       setQuittingFlag(true);
     };
@@ -53,28 +66,30 @@ export const handleSystemShutdown = () => {
   }
 };
 
-export const removeSystemShutdownHandlers = () => {
+export const removeSystemShutdownHandlers = (): void => {
   // Clear any pending timeout
   if (quitTimeoutId) {
     try {
       clearTimeout(quitTimeoutId);
       quitTimeoutId = null;
     } catch (error) {
-      logger.error("Error clearing quit timeout: " + error.message);
+      logger.error("Error clearing quit timeout: " + (error as Error).message);
     }
   }
 
   // Remove macOS event listeners
   if (process.platform === "darwin") {
     try {
-      const { app } = require("electron").remote;
+      const app = getElectronApp();
       if (beforeQuitHandler)
         app.removeListener("before-quit", beforeQuitHandler);
       if (willQuitHandler) app.removeListener("will-quit", willQuitHandler);
       if (windowAllClosedHandler)
         app.removeListener("window-all-closed", windowAllClosedHandler);
     } catch (error) {
-      logger.error("Error removing system shutdown handlers: " + error.message);
+      logger.error(
+        "Error removing system shutdown handlers: " + (error as Error).message
+      );
     }
   }
 };
