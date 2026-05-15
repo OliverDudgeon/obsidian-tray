@@ -23,6 +23,7 @@ interface ElectronTray {
   destroy: () => void;
   setContextMenu: (menu: ElectronMenu) => void;
   setToolTip: (toolTip: string) => void;
+  popUpContextMenu: () => void;
   on: (event: string, listener: () => void) => void;
 }
 
@@ -87,7 +88,7 @@ export const createTrayIcon = (
   const { Tray, Menu, nativeImage } = getElectronTrayComponents();
 
   const obsidianIcon = nativeImage.createFromDataURL(
-    plugin.settings.trayIconImage ?? OBSIDIAN_BASE64_ICON
+    plugin.settings.trayIconImage || OBSIDIAN_BASE64_ICON,
   );
 
   const contextMenu = Menu.buildFromTemplate([
@@ -119,15 +120,20 @@ export const createTrayIcon = (
   if (tray) {
     tray.setContextMenu(contextMenu);
     tray.setToolTip(
-      replaceVaultName(plugin.settings.trayIconTooltip, plugin.app)
+      replaceVaultName(
+        plugin.settings.trayIconTooltip || "{{vault}} | Obsidian",
+        plugin.app,
+      ),
     );
 
     tray.on("click", () => {
       if (process.platform === "darwin") {
-        // On macOS, left click shows/hides windows
-        toggleWindows(plugin as any, false);
+        // macOS does not register separate left/right click actions for
+        // menu bar items, so the icon should open the menu without
+        // triggering a window toggle (see fix #16).
+        tray!.popUpContextMenu();
       } else {
-        showWindows();
+        toggleWindows(plugin as any, false);
       }
     });
   }
