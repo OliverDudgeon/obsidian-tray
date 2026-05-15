@@ -1,8 +1,7 @@
 {
-	"id": "tray",
+	"id": "tray2",
 	"name": "Tray",
-	"author": "dragonwocky",
-	"authorUrl": "https://dragonwocky.me/",
+	"author": "Oliver Dudgeon, dragonwocky",
 	"description": "Run Obsidian from the system tray for customisable window management & global quick notes",
 	"version": "1.0.1",
 	"isDesktopOnly": true,
