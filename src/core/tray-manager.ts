@@ -13,9 +13,9 @@ import {
   OBSIDIAN_BASE64_ICON,
 } from "../utils/constants";
 
-// Electron API helper
+// Electron API helper — Obsidian exposes these via the legacy `remote` shim
 const getElectronTrayComponents = () => {
-  const { Tray, Menu, nativeImage } = globalThis.require("electron");
+  const { Tray, Menu, nativeImage } = globalThis.require("electron").remote;
   return { Tray, Menu, nativeImage };
 };
 

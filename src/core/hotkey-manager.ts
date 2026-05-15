@@ -8,9 +8,9 @@ import {
   LOG_UNREGISTER_HOTKEY,
 } from "../utils/logger";
 
-// Electron API helper
+// Electron API helper — Obsidian exposes globalShortcut via the legacy `remote` shim
 const getElectronGlobalShortcut = () => {
-  const { globalShortcut } = globalThis.require("electron");
+  const { globalShortcut } = globalThis.require("electron").remote;
   return globalShortcut;
 };
 

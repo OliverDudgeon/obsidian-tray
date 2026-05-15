@@ -57,21 +57,26 @@ interface ElectronBrowserWindow {
 	getAllWindows: () => unknown[];
 }
 
-const electronRequire = (globalThis as unknown as {
-	require: (mod: string) => {
-		app: ElectronApp;
-		BrowserWindow: ElectronBrowserWindow;
-		remote: { getCurrentWindow: () => unknown };
-	};
-}).require;
+// Obsidian's renderer exposes Electron's main-process APIs via the legacy
+// `remote` shim — app, BrowserWindow, getCurrentWindow all live there.
+const electronRemote = (
+	globalThis as unknown as {
+		require: (mod: string) => {
+			remote: {
+				app: ElectronApp;
+				BrowserWindow: ElectronBrowserWindow;
+				getCurrentWindow: () => unknown;
+			};
+		};
+	}
+).require("electron").remote;
 
-const getElectronApp = (): ElectronApp => electronRequire("electron").app;
+const getElectronApp = (): ElectronApp => electronRemote.app;
 
 const getElectronBrowserWindow = (): ElectronBrowserWindow =>
-	electronRequire("electron").BrowserWindow;
+	electronRemote.BrowserWindow;
 
-const getElectronCurrentWindow = (): unknown =>
-	electronRequire("electron").remote.getCurrentWindow();
+const getElectronCurrentWindow = (): unknown => electronRemote.getCurrentWindow();
 
 export const DEFAULT_SETTINGS: PluginSettings = {
 	runInBackground: true,

@@ -9,9 +9,9 @@ import {
   LOG_WINDOW_CLOSE,
 } from "../utils/logger";
 
-// Electron API helpers
+// Electron API helpers — Obsidian exposes Electron via the legacy `remote` shim
 const getElectronCurrentWindow = (): ElectronWindow => {
-  const { getCurrentWindow } = globalThis.require("electron");
+  const { getCurrentWindow } = globalThis.require("electron").remote;
   return getCurrentWindow();
 };
 
