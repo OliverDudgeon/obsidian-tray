@@ -35,17 +35,17 @@ pnpm build
 ```
 src/
 ├── core/           # Core functionality modules
-│   ├── hotkey-manager.js
-│   ├── system-shutdown.js
-│   ├── tray-manager.js
-│   └── window-manager.js
+│   ├── hotkey-manager.ts
+│   ├── system-shutdown.ts
+│   ├── tray-manager.ts
+│   └── window-manager.ts
 ├── ui/             # User interface components
-│   └── settings-tab.js
+│   └── settings-tab.ts
 ├── utils/          # Utility functions
-│   ├── constants.js
-│   ├── logger.js
-│   └── platform.js
-└── main.js         # Main plugin class
+│   ├── constants.ts
+│   ├── logger.ts
+│   └── platform.ts
+└── main.ts         # Main plugin class
 ```
 
 ## Configuration

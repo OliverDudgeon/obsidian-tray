@@ -6,7 +6,7 @@ import {
   logger,
   LOG_REGISTER_HOTKEY,
   LOG_UNREGISTER_HOTKEY,
-} from "../utils/logger.js";
+} from "../utils/logger";
 
 // Electron API helper
 const getElectronGlobalShortcut = () => {

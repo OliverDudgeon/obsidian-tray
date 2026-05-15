@@ -7,7 +7,7 @@ import {
   LOG_SHOWING_WINDOWS,
   LOG_HIDING_WINDOWS,
   LOG_WINDOW_CLOSE,
-} from "../utils/logger.js";
+} from "../utils/logger";
 
 // Electron API helpers
 const getElectronCurrentWindow = (): ElectronWindow => {
@@ -39,6 +39,7 @@ interface ElectronWindow {
   minimize: () => void;
   restore: () => void;
   moveTop: () => void;
+  destroy: () => void;
   on: (event: string, listener: (...args: any[]) => void) => void;
   removeListener: (event: string, listener: (...args: any[]) => void) => void;
 }

@@ -3,14 +3,14 @@
  */
 
 import { PluginSettingTab, Setting, App, moment } from "obsidian";
-import { getPlatformText } from "../utils/platform.js";
+import { getPlatformText } from "../utils/platform";
 import {
   ACCELERATOR_FORMAT,
   MOMENT_FORMAT,
   DEFAULT_DATE_FORMAT,
   OBSIDIAN_BASE64_ICON,
-} from "../utils/constants.js";
-import { replaceVaultName } from "../core/tray-manager.js";
+} from "../utils/constants";
+import { replaceVaultName } from "../core/tray-manager";
 
 // Define interfaces for our plugin types
 interface ObsidianApp {

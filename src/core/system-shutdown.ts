@@ -2,8 +2,8 @@
  * System shutdown handling for macOS
  */
 
-import { logger } from "../utils/logger.js";
-import { setQuittingFlag } from "./window-manager.js";
+import { logger } from "../utils/logger";
+import { setQuittingFlag } from "./window-manager";
 
 // Electron API helper
 const getElectronApp = () => {

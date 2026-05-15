@@ -2,8 +2,8 @@
  * System tray icon management
  */
 
-import { logger, LOG_TRAY_ICON } from "../utils/logger.js";
-import { toggleWindows } from "./window-manager.js";
+import { logger, LOG_TRAY_ICON } from "../utils/logger";
+import { toggleWindows } from "./window-manager";
 import {
   ACTION_QUICK_NOTE,
   ACTION_SHOW,
@@ -11,7 +11,7 @@ import {
   ACTION_RELAUNCH,
   ACTION_CLOSE,
   OBSIDIAN_BASE64_ICON,
-} from "../utils/constants.js";
+} from "../utils/constants";
 
 // Electron API helper
 const getElectronTrayComponents = () => {

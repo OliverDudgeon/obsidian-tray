@@ -1,21 +1,29 @@
-# Build outputs
-main.js
-*.js.map
+# vscode
+.vscode
 
-# Node modules
-node_modules/
+# Intellij
+*.iml
+.idea
 
-# Package managers
+# npm / pnpm
+node_modules
 package-lock.json
-pnpm-lock.yaml
 yarn.lock
 
-# OS
+# Don't include the compiled main.js file in the repo.
+# It should be uploaded to GitHub releases instead.
+main.js
+
+# Exclude sourcemaps
+*.map
+
+# obsidian
+data.json
+
+# Exclude macOS Finder (System Explorer) View States
 .DS_Store
-Thumbs.db
 
 # Editor
-.vscode/
 *.swp
 *.swo
 *~
