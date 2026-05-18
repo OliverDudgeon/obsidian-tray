@@ -1,6 +1,6 @@
 {
 	"name": "obsidian-tray",
-	"version": "1.0.2",
+	"version": "1.0.3",
 	"description": "Run Obsidian from the system tray for customisable window management & global quick notes",
 	"main": "main.js",
 	"type": "module",
