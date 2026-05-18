@@ -28,6 +28,13 @@ export interface ElectronWebContents {
 	on: (event: string, listener: (win: ElectronWindow) => void) => void;
 }
 
+export interface ElectronRectangle {
+	x: number;
+	y: number;
+	width: number;
+	height: number;
+}
+
 export interface ElectronWindow {
 	setSkipTaskbar: (skip: boolean) => void;
 	isMaximized: () => boolean;
@@ -38,10 +45,15 @@ export interface ElectronWindow {
 	show: () => void;
 	hide: () => void;
 	focus: () => void;
+	blur: () => void;
 	maximize: () => void;
 	minimize: () => void;
 	restore: () => void;
 	destroy: () => void;
+	moveTop: () => void;
+	getBounds: () => ElectronRectangle;
+	setPosition: (x: number, y: number) => void;
+	setVisibleOnAllWorkspaces: (visible: boolean) => void;
 	on: (event: string, listener: (...args: unknown[]) => void) => void;
 	removeListener: (
 		event: string,

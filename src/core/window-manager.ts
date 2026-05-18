@@ -71,12 +71,39 @@ export const observeWindows = (plugin: TrayPlugin): void => {
 export const showWindows = (): void => {
 	logger.info(LOG_SHOWING_WINDOWS);
 	const isDarwin = process.platform === "darwin";
+	if (isDarwin) electronRemote.app.dock.show();
+
 	getWindows().forEach((win) => {
-		if (isDarwin) electronRemote.app.dock.show();
-		if (win.isMinimized()) win.restore();
-		win.show();
-		if (maximizedWindows.has(win)) win.maximize();
-		win.focus();
+		if (isDarwin) {
+			// macOS Spaces won't pull a window across to the current desktop on a
+			// plain `show()` — instead the system follows the window. Briefly
+			// marking it visible on all workspaces forces it onto the active
+			// Space; a one-pixel position nudge after the toggle is needed to
+			// make AppKit recompute its Space membership.
+			const isMaximized = maximizedWindows.has(win);
+			const bounds = win.getBounds();
+
+			win.setVisibleOnAllWorkspaces(true);
+			win.show();
+
+			setTimeout(() => {
+				if (win.isDestroyed()) return;
+				win.setVisibleOnAllWorkspaces(false);
+				win.setPosition(bounds.x + 1, bounds.y + 1);
+				win.setPosition(bounds.x, bounds.y);
+				win.focus();
+				win.moveTop();
+				if (isMaximized) win.maximize();
+			}, 30);
+		} else {
+			if (win.isMinimized()) win.restore();
+			if (maximizedWindows.has(win)) {
+				win.maximize();
+				win.focus();
+			} else {
+				win.show();
+			}
+		}
 	});
 };
 
