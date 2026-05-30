@@ -16,6 +16,9 @@ export interface ElectronApp {
 	relaunch: () => void;
 	exit: (code: number) => void;
 	quit: () => void;
+	// On macOS, `steal: true` brings the app to the foreground even when
+	// another app on another Space currently has focus.
+	focus: (options?: { steal?: boolean }) => void;
 	dock: ElectronDock;
 	on: (event: string, listener: (event: Event) => void) => void;
 	removeListener: (
@@ -66,6 +69,22 @@ export interface ElectronBrowserWindow {
 	getAllWindows: () => ElectronWindow[];
 }
 
+export interface ElectronPoint {
+	x: number;
+	y: number;
+}
+
+export interface ElectronDisplay {
+	id: number;
+	bounds: ElectronRectangle;
+	workArea: ElectronRectangle;
+}
+
+export interface ElectronScreen {
+	getCursorScreenPoint: () => ElectronPoint;
+	getDisplayNearestPoint: (point: ElectronPoint) => ElectronDisplay;
+}
+
 // Opaque handle types — we never touch their internals directly.
 export type ElectronNativeImage = object;
 export type ElectronMenu = object;
@@ -110,6 +129,7 @@ interface ElectronRemote {
 	Menu: ElectronMenuStatic;
 	nativeImage: ElectronNativeImageStatic;
 	globalShortcut: ElectronGlobalShortcut;
+	screen: ElectronScreen;
 	getCurrentWindow: () => ElectronWindow;
 }
 

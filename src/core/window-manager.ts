@@ -8,7 +8,11 @@ import {
 	LOG_HIDING_WINDOWS,
 	LOG_WINDOW_CLOSE,
 } from "../utils/logger";
-import { electronRemote, type ElectronWindow } from "../utils/electron";
+import {
+	electronRemote,
+	type ElectronWindow,
+	type ElectronRectangle,
+} from "../utils/electron";
 
 interface PluginSettings {
 	hideTaskbarIcon: boolean;
@@ -68,6 +72,43 @@ export const observeWindows = (plugin: TrayPlugin): void => {
 	}
 };
 
+// Returns the position the window should occupy so that it lands on the
+// display where the cursor currently is (i.e. the display the user is working
+// on). If the window is already on that display, its position is left
+// untouched. The window's offset relative to its previous display's work area
+// is preserved on the target display and clamped so the window stays fully
+// on-screen.
+const positionOnCursorDisplay = (
+	bounds: ElectronRectangle,
+): { x: number; y: number } => {
+	const { screen } = electronRemote;
+	const center = {
+		x: bounds.x + bounds.width / 2,
+		y: bounds.y + bounds.height / 2,
+	};
+	const cursorDisplay = screen.getDisplayNearestPoint(
+		screen.getCursorScreenPoint(),
+	);
+	const windowDisplay = screen.getDisplayNearestPoint(center);
+
+	if (cursorDisplay.id === windowDisplay.id) {
+		return { x: bounds.x, y: bounds.y };
+	}
+
+	const from = windowDisplay.workArea;
+	const to = cursorDisplay.workArea;
+	const relX = from.width > 0 ? (bounds.x - from.x) / from.width : 0;
+	const relY = from.height > 0 ? (bounds.y - from.y) / from.height : 0;
+
+	const x = Math.round(to.x + relX * to.width);
+	const y = Math.round(to.y + relY * to.height);
+
+	return {
+		x: Math.max(to.x, Math.min(x, to.x + to.width - bounds.width)),
+		y: Math.max(to.y, Math.min(y, to.y + to.height - bounds.height)),
+	};
+};
+
 export const showWindows = (): void => {
 	logger.info(LOG_SHOWING_WINDOWS);
 	const isDarwin = process.platform === "darwin";
@@ -78,10 +119,14 @@ export const showWindows = (): void => {
 			// macOS Spaces won't pull a window across to the current desktop on a
 			// plain `show()` — instead the system follows the window. Briefly
 			// marking it visible on all workspaces forces it onto the active
-			// Space; a one-pixel position nudge after the toggle is needed to
-			// make AppKit recompute its Space membership.
+			// Space; a position change after the toggle is needed to make AppKit
+			// recompute its Space membership.
 			const isMaximized = maximizedWindows.has(win);
 			const bounds = win.getBounds();
+			// Move the window to the display the cursor is on so it follows the
+			// user across monitors. Falls back to its current position when it is
+			// already on that display.
+			const target = positionOnCursorDisplay(bounds);
 
 			win.setVisibleOnAllWorkspaces(true);
 			win.show();
@@ -89,10 +134,18 @@ export const showWindows = (): void => {
 			setTimeout(() => {
 				if (win.isDestroyed()) return;
 				win.setVisibleOnAllWorkspaces(false);
-				win.setPosition(bounds.x + 1, bounds.y + 1);
-				win.setPosition(bounds.x, bounds.y);
+				// A one-pixel nudge guarantees a position change (forcing the Space
+				// recompute) even when the window stays on the same display.
+				win.setPosition(target.x + 1, target.y + 1);
+				win.setPosition(target.x, target.y);
 				win.focus();
 				win.moveTop();
+				// Bring the app itself to the foreground. Without this the
+				// previously-active app (often on the Space the hotkey was pressed
+				// from) keeps focus and renders Obsidian behind it.
+				electronRemote.app.focus({ steal: true });
+				// Re-maximize after positioning so the window fills the cursor's
+				// display rather than its original one.
 				if (isMaximized) win.maximize();
 			}, 30);
 		} else {
