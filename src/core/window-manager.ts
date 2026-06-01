@@ -128,6 +128,11 @@ export const showWindows = (): void => {
 			// already on that display.
 			const target = positionOnCursorDisplay(bounds);
 
+			// Position the window before showing it. Showing first would flash
+			// the window at its old position/monitor for a frame before the
+			// move; positioning while still hidden makes its first paint land in
+			// the final spot.
+			win.setPosition(target.x, target.y);
 			win.setVisibleOnAllWorkspaces(true);
 			win.show();
 
@@ -135,7 +140,8 @@ export const showWindows = (): void => {
 				if (win.isDestroyed()) return;
 				win.setVisibleOnAllWorkspaces(false);
 				// A one-pixel nudge guarantees a position change (forcing the Space
-				// recompute) even when the window stays on the same display.
+				// recompute) even when the window stays on the same display. Done at
+				// the target position, so it is not visible.
 				win.setPosition(target.x + 1, target.y + 1);
 				win.setPosition(target.x, target.y);
 				win.focus();
