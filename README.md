@@ -58,6 +58,12 @@ tray/menu bar context menu or with the in-app command palette (search for
 "Tray: Relaunch Obsidian" or "Tray: Close Vault"). Hotkeys can be assigned to
 the commands via Obsidian's built-in hotkey manager.
 
+While Tray is enabled, Obsidian's built-in "Reload app without saving" command
+also uses the relaunch action. Relaunch performs a normal application quit so
+Obsidian can save its window positions before restarting, preserving the monitor
+each window was on. Normal shutdown also allows Obsidian to save workspace state,
+despite the built-in command's "without saving" label.
+
 ### Quick notes
 
 | Option                 | Description                                                                                                                                                            | Default                      |
@@ -108,6 +114,18 @@ pnpm build      # typecheck + production bundle to main.js
 pnpm typecheck  # tsc --noEmit
 pnpm lint       # eslint
 ```
+
+`pnpm test` runs the fast regression suite. To also run the isolated Electron
+lifecycle tests, provide an installed Electron executable and `@electron/remote`
+package path:
+
+```bash
+ELECTRON_TEST_BINARY=/path/to/electron ELECTRON_REMOTE_PATH=/path/to/@electron/remote pnpm test
+```
+
+These tests use temporary profiles and do not open an Obsidian vault. They check
+relaunch, canceled window closes, and the fallback for a stalled quit across real
+Electron processes.
 
 ### Project structure
 

@@ -235,8 +235,14 @@ export default class TrayPlugin extends Plugin {
 
 	relaunchApp(): void {
 		const { app } = electronRemote;
+		// Remote before-quit notifications arrive asynchronously. Release our
+		// interception before requesting quit, rather than waiting for one.
+		setQuittingFlag(true);
+		this.allowWindowClose();
 		app.relaunch();
-		app.exit(0);
+		// Obsidian saves window bounds on close. A forced exit skips that
+		// handler and can reopen the window on its previously saved monitor.
+		app.quit();
 	}
 
 	closeVault(): void {

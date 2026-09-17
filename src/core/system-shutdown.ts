@@ -1,5 +1,5 @@
 /**
- * System shutdown handling for macOS
+ * Allow application quit and relaunch to bypass close-to-tray interception.
  */
 
 import { logger } from "../utils/logger";
@@ -12,8 +12,8 @@ let windowAllClosedHandler: ((event: Event) => void) | null = null;
 let quitTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
 export const handleSystemShutdown = (): void => {
-	if (process.platform !== "darwin") return;
-
+	// Every vault must allow its windows to close when the app quits,
+	// including when another vault initiates a relaunch.
 	const { app } = electronRemote;
 
 	beforeQuitHandler = () => {
@@ -28,7 +28,7 @@ export const handleSystemShutdown = (): void => {
 		// Force quit if something hangs.
 		quitTimeoutId = setTimeout(() => {
 			logger.warn("Force quitting due to timeout");
-			process.exit(0);
+			electronRemote.app.exit(0);
 		}, 5000);
 	};
 
@@ -62,8 +62,6 @@ export const removeSystemShutdownHandlers = (): void => {
 			logger.error("Error clearing quit timeout: " + (error as Error).message);
 		}
 	}
-
-	if (process.platform !== "darwin") return;
 
 	try {
 		const { app } = electronRemote;

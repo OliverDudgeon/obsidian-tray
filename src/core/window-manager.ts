@@ -40,8 +40,11 @@ export const observeWindows = (plugin: TrayPlugin): void => {
 		vaultWindows.add(win);
 		win.setSkipTaskbar(plugin.settings.hideTaskbarIcon);
 
-		win.on("close", () => {
+		// A close request can be canceled by close-to-tray or another handler.
+		// Keep the window available to Show vault until it is actually closed.
+		win.on("closed", () => {
 			vaultWindows.delete(win);
+			maximizedWindows.delete(win);
 		});
 
 		// preserve maximised windows after minimisation

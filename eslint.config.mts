@@ -18,6 +18,7 @@ export default tseslint.config(
 						"version-bump.mjs",
 						"manifest.json",
 						"tests/*.mjs",
+						"tests/electron/*.cjs",
 					],
 				},
 				tsconfigRootDir: import.meta.dirname,
