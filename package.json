@@ -1,10 +1,11 @@
 {
 	"name": "obsidian-tray",
-	"version": "1.0.5",
+	"version": "1.0.6",
 	"description": "Run Obsidian from the system tray for customisable window management & global quick notes",
 	"main": "main.js",
 	"type": "module",
 	"scripts": {
+		"test": "node --test tests/*.test.mjs",
 		"dev": "node esbuild.config.mjs",
 		"build": "tsc --noEmit --skipLibCheck && node esbuild.config.mjs production",
 		"typecheck": "tsc --noEmit",

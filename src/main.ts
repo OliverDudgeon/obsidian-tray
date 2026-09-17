@@ -4,7 +4,7 @@
  * (https://github.com/dragonwocky/obsidian-tray/) under the MIT license
  */
 
-import { Plugin, moment, normalizePath, type TFile } from "obsidian";
+import { Plugin, moment, normalizePath, type Command, type TFile } from "obsidian";
 import { logger, log, LOG_LOADING, LOG_CLEANUP } from "./utils/logger";
 import { DEFAULT_DATE_FORMAT } from "./utils/constants";
 import {
@@ -51,6 +51,12 @@ interface FileManagerWithCreate {
 	createNewMarkdownFile: (root: unknown, name: string) => Promise<TFile>;
 }
 
+interface AppWithCommands {
+	commands?: {
+		commands: Record<string, Command | undefined>;
+	};
+}
+
 export const DEFAULT_SETTINGS: PluginSettings = {
 	runInBackground: true,
 	hideOnLaunch: false,
@@ -95,6 +101,7 @@ export default class TrayPlugin extends Plugin {
 			name: "Close vault",
 			callback: () => this.closeVault(),
 		});
+		this.app.workspace.onLayoutReady(() => this.interceptReloadCommand());
 
 		logger.debug("Plugin loaded successfully");
 	}
@@ -208,6 +215,22 @@ export default class TrayPlugin extends Plugin {
 			);
 
 		this.showWindows();
+	}
+
+	interceptReloadCommand(): void {
+		// Obsidian's built-in reload uses location.reload(), which our
+		// beforeunload handler cancels just like a window close. The command
+		// registry is an internal API, so tolerate it or the command being absent.
+		const app = this.app as unknown as AppWithCommands;
+		const command = app.commands?.commands?.["app:reload"];
+		if (!command?.callback) return;
+
+		const originalCallback = command.callback;
+		const callback = () => this.relaunchApp();
+		command.callback = callback;
+		this.register(() => {
+			if (command.callback === callback) command.callback = originalCallback;
+		});
 	}
 
 	relaunchApp(): void {

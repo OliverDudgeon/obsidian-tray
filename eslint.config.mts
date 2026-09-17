@@ -17,6 +17,7 @@ export default tseslint.config(
 						"esbuild.config.mjs",
 						"version-bump.mjs",
 						"manifest.json",
+						"tests/*.mjs",
 					],
 				},
 				tsconfigRootDir: import.meta.dirname,
