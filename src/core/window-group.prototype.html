@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Vault group toggle · throwaway prototype</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f5f4f8;color:#252333;font:15px/1.5 system-ui,sans-serif}main{max-width:1100px;margin:auto;padding:32px 24px}h1{font-size:30px;letter-spacing:-1px;margin:6px 0}h2{font-size:18px;margin:0 0 12px}p{margin:8px 0 16px}.muted,small{color:#656174}.eyebrow{font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:#6950aa}section{background:white;border:1px solid #dedbe6;border-radius:12px;padding:20px;margin:18px 0}button{font:inherit;border:1px solid #d2cddd;border-radius:7px;background:white;padding:8px 12px;cursor:pointer;color:inherit}button:hover{background:#f0ecfa}button:focus-visible{outline:3px solid #9876df;outline-offset:2px}button:disabled{opacity:.4;cursor:default}.primary,[aria-selected=true]{background:#6c48ab;color:white;border-color:#6c48ab}.primary:hover,[aria-selected=true]:hover{background:#59388f}.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.columns{display:grid;grid-template-columns:1.15fr 1fr;gap:20px}.desktop{height:270px;background:#eeeaf5;border-radius:9px;position:relative;overflow:hidden}.window{position:absolute;width:63%;height:150px;border:1px solid #a9a1b8;border-radius:8px;background:#faf9fd;box-shadow:0 5px 14px #33264a22;padding:0;text-align:left;overflow:hidden}.window strong{display:block;background:#e3deec;padding:10px}.window span{display:block;padding:12px}.window.active{border:2px solid #6c48ab}.window.active strong{background:#6c48ab;color:white}.outside{position:absolute;bottom:10px;right:12px;font-size:12px;color:#625973}.facts{display:grid;grid-template-columns:130px 1fr;gap:9px;margin:0}.facts dt{color:#656174}.facts dd{margin:0}table{border-collapse:collapse;width:100%;margin-top:16px}th,td{text-align:left;padding:10px 6px;border-bottom:1px solid #eeeaf3}th{font-size:12px;color:#656174}td button{font-size:12px;padding:5px 8px}.status{padding:12px;background:#f2eef9;border-radius:8px;margin:14px 0}.steps{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}.steps button{max-width:245px;text-align:left}.steps .done{border-color:#6c48ab;color:#6c48ab}#history{max-height:130px;overflow:auto;margin-bottom:0;padding-left:22px}.table-wrap{overflow:auto}@media(max-width:750px){.columns{grid-template-columns:1fr}main{padding:20px 12px}.facts{grid-template-columns:110px 1fr}}
+</style>
+<main>
+<div class="eyebrow">Obsidian Tray / throwaway logic prototype</div>
+<h1>Put the vault away. Pick up where you left off.</h1>
+<p class="muted">Does one hotkey feel predictable when notes and Settings share a group? Try hiding, recalling, and changing windows below. This simulates one vault; it does not control Obsidian.</p>
+<section aria-label="Current state">
+<div class="columns"><div><h2>Simulated desktop</h2><div class="desktop" id="desktop"></div><small>Click a visible window to focus it. Overlap follows focus history.</small></div>
+<div><h2>What the hotkey remembers</h2><dl class="facts" id="facts"></dl><p id="message" class="status" role="status"></p><button class="primary" id="toggle">Press hotkey</button> <small id="next"></small></div></div>
+<div class="table-wrap"><table><thead><tr><th>Window</th><th>Visibility</th><th>Size</th><th>Independent actions</th></tr></thead><tbody id="windows"></tbody></table></div>
+</section>
+<section><h2>Free play</h2><div class="row"><button id="external">Focus another app</button><button id="other-vault">Focus another vault</button><button id="new-note">Open another note window</button><button id="settings">Open / focus Settings</button><button id="reset">Reset demo</button><label><input id="background" type="checkbox" checked> Run in background (hide instead of minimise)</label></div><p class="muted"><small>Restore opens one existing window through the OS. Close simulates a window actually being destroyed; vault shutdown and close-to-tray interception are outside this model.</small></p></section>
+<section><h2>Guided walkthroughs</h2><div class="row" role="tablist" aria-label="Scenarios" id="tabs"></div><div id="walkthrough" role="tabpanel"></div></section>
+<section><h2>Recent actions</h2><ol id="history"></ol></section>
+<p class="muted"><strong>Proposed rules:</strong> Any focused window in this vault triggers group hide. Only visible, non-minimised windows join the recall set. Recall restores surviving members back-to-front, then focuses the most recently used visible member. Independent minimise or close removes a window from recall. An independently restored or newly opened window joins the next hide cycle. If no window can be recalled, use the most recent surviving note window, then any surviving window.</p>
+<p class="muted"><strong>Still to validate in Electron:</strong> window ownership, native child-window constraints, focus events generated during hide/show, and Spaces/fullscreen behaviour. Focus history is a proposed approximation of stacking order, not a claim that we can capture the OS's exact stacking. Position and monitor changes are intentionally not simulated. Other vaults keep their own state.</p>
+</main>
+<script>
+// Portable, pure state model. No DOM or Electron dependencies.
+const GroupModel = (() => {
+  const initial = () => ({windows:[{id:'main',name:'Original note',kind:'note',visibility:'visible',maximized:false},{id:'note2',name:'Popped-out note',kind:'note',visibility:'visible',maximized:false},{id:'settings',name:'Settings',kind:'settings',visibility:'visible',maximized:false}],order:['main','note2','settings'],focus:'settings',recall:[],background:true,serial:3,message:'Settings has focus. The hotkey will hide all three windows.'});
+  const visible = s => s.order.filter(id => s.windows.some(w => w.id===id && w.visibility==='visible'));
+  const belongs = s => s.windows.some(w => w.id===s.focus);
+  function reduce(previous, action) {
+    const s = structuredClone(previous);
+    const win = s.windows.find(w => w.id===action.id);
+    const names = ids => ids.map(id=>s.windows.find(w=>w.id===id)?.name).filter(Boolean).join(' → ') || 'None';
+    const raise = id => {s.order=s.order.filter(x=>x!==id).concat(id);s.focus=id;};
+    const removeRecall = id => {s.recall=s.recall.filter(x=>x!==id);};
+    if(action.type==='toggle') {
+      if(belongs(s)) {
+        const shown=visible(s);
+        // Merge pending members if a window was independently restored while hidden.
+        s.recall=s.order.filter(id=>s.recall.includes(id)||shown.includes(id));
+        shown.forEach(id=>{s.windows.find(w=>w.id===id).visibility=s.background?'hidden':'minimised';});
+        s.focus='external';
+        s.message=`${s.background?'Hidden':'Minimised'} together: ${names(shown)}. Recall remembers ${s.recall.length} windows.`;
+      } else {
+        const recalled=s.recall.filter(id=>s.windows.some(w=>w.id===id));
+        recalled.forEach(id=>{s.windows.find(w=>w.id===id).visibility='visible';});
+        let shown=visible(s);
+        if(!shown.length) {
+          const survivor=[...s.order].reverse().find(id=>s.windows.find(w=>w.id===id)?.kind==='note') || s.order.at(-1);
+          if(survivor){s.windows.find(w=>w.id===survivor).visibility='visible';shown=[survivor];}
+        }
+        if(shown.length) raise(shown.at(-1));
+        s.recall=[];
+        s.message=shown.length?`Brought forward, back to front: ${names(shown)}. Focus: ${names([s.focus])}.`:'No surviving windows. The hotkey does not reopen a closed vault.';
+      }
+    } else if(action.type==='outside') {s.focus=action.id;s.message=action.id==='other-vault'?'Another vault has focus. This vault’s hotkey will recall this vault.':'Another app has focus. The hotkey will bring this vault forward.';
+    } else if(action.type==='focus' && win && win.visibility==='visible') {raise(win.id);s.message=`Focused ${win.name}; it is now last in the stacking order.`;
+    } else if(action.type==='restore' && win) {win.visibility='visible';removeRecall(win.id);raise(win.id);s.message=`Independently restored ${win.name}. Other pending windows remain available for recall.`;
+    } else if(action.type==='minimise' && win) {win.visibility='minimised';removeRecall(win.id);if(s.focus===win.id)s.focus=visible(s).at(-1)||'external';s.message=`Independently minimised ${win.name}; group recall will leave it alone.`;
+    } else if(action.type==='close' && win) {s.windows=s.windows.filter(w=>w.id!==win.id);s.order=s.order.filter(id=>id!==win.id);removeRecall(win.id);if(s.focus===win.id)s.focus=visible(s).at(-1)||'external';s.message=`Closed ${win.name}. It will not be resurrected by recall.`;
+    } else if(action.type==='maximize' && win) {win.maximized=!win.maximized;s.message=`${win.name} is ${win.maximized?'maximised':'normal size'}; toggling preserves this.`;
+    } else if(action.type==='open') {
+      const existing=action.kind==='settings' && s.windows.find(w=>w.kind==='settings');
+      if(existing){existing.visibility='visible';removeRecall(existing.id);raise(existing.id);s.message='Opened existing Settings.';}
+      else {const id=`window${s.serial++}`;const name=action.kind==='settings'?'Settings':`Note window ${s.serial-1}`;s.windows.push({id,name,kind:action.kind,visibility:'visible',maximized:false});raise(id);s.message=`Opened ${name}. Pending recall members are preserved.`;}
+    } else if(action.type==='background'){s.background=action.value;s.message=`Future group hides will ${s.background?'hide':'minimise'} visible windows.`;}
+    return s;
+  }
+  return {initial,reduce,visible,belongs};
+})();
+</script>
+<script>
+const $=id=>document.getElementById(id);
+const step=(label,type,id)=>({label,action:{type,id}});
+const scenarios=[
+ {title:'Settings round trip',description:'Settings counts as vault focus. Hide all three, then return with Settings still on top.',steps:[step('Hide the vault','toggle'),step('Recall the vault','toggle')]},
+ {title:'Stacking & size',description:'Use the popped-out note last and maximise it. Its place and size should survive the round trip.',steps:[step('Focus popped-out note','focus','note2'),step('Maximise popped-out note','maximize','note2'),step('Hide the group','toggle'),step('Restore the group','toggle')]},
+ {title:'Already minimised',description:'A note you minimised yourself should stay minimised when the group returns.',steps:[step('Minimise popped-out note','minimise','note2'),step('Hide remaining windows','toggle'),step('Recall remaining windows','toggle')]},
+ {title:'Closed while hidden',description:'If Settings disappears while hidden, recall should focus the next surviving window without reopening Settings.',steps:[step('Hide all windows','toggle'),step('Destroy hidden Settings','close','settings'),step('Recall survivors','toggle')]},
+ {title:'Partial restore',description:'Restore one window independently, then toggle again. The other hidden windows must not be forgotten.',steps:[step('Hide the group','toggle'),step('Restore original note only','restore','main'),step('Hide again','toggle'),step('Recall the full group','toggle')]},
+ {title:'Other vault',description:'Another vault is outside this group. The first press brings this vault forward; the second hides this vault.',steps:[step('Switch to another vault','outside','other-vault'),step('Bring this vault forward','toggle'),step('Hide this vault','toggle')]},
+ {title:'New window while hidden',description:'An external action opens a new note while the group is hidden. A subsequent hide should add it without losing the old group.',steps:[step('Hide old windows','toggle'),{label:'Open a new note',action:{type:'open',kind:'note'}},step('Hide new note too','toggle'),step('Recall all four','toggle')]},
+ {title:'Nothing visible',description:'When everything was minimised independently, there is no saved group. Recall falls back to the most recently used surviving note.',steps:[step('Minimise Settings','minimise','settings'),step('Minimise popped-out note','minimise','note2'),step('Minimise original note','minimise','main'),step('Recall a note','toggle')]}
+];
+let state=GroupModel.initial(),history=[],scenario=0,progress=0,freePlay=false;
+function dispatch(action,guided=false){state=GroupModel.reduce(state,action);history.unshift(state.message);if(!guided)freePlay=true;render();}
+function reset(index=0){state=GroupModel.initial();history=[];scenario=index;progress=0;freePlay=false;render();}
+function button(label,action,disabled=false){const b=document.createElement('button');b.textContent=label;b.disabled=disabled;b.onclick=()=>dispatch(action);return b;}
+function render(){
+ const name=id=>state.windows.find(w=>w.id===id)?.name || (id==='other-vault'?'Another vault':'Another app');
+ const names=ids=>ids.map(name).join(' → ')||'None';
+ const visible=GroupModel.visible(state);
+ $('desktop').replaceChildren();
+ visible.forEach((id,i)=>{const w=state.windows.find(w=>w.id===id);const b=button('',{type:'focus',id});b.className='window'+(state.focus===id?' active':'');b.style.left=`${12+i*22}px`;b.style.top=`${12+i*27}px`;b.style.zIndex=i+1;b.setAttribute('aria-label',`Focus ${w.name} on desktop`);const title=document.createElement('strong');title.textContent=w.name;const detail=document.createElement('span');detail.textContent=`${w.kind==='settings'?'Appearance · Hotkeys · Plugins':'Notes for this vault'}${w.maximized?' · Maximised (schematic)':''}`;b.append(title,detail);$('desktop').append(b);});
+ const outside=document.createElement('div');outside.className='outside';outside.textContent=GroupModel.belongs(state)?'This vault is in front':`${name(state.focus)} is in front (vault windows stay visible behind)`;$('desktop').append(outside);
+ $('facts').replaceChildren();
+ for(const [label,value] of [['Focus',name(state.focus)],['Back → front',names(visible)],['Focus history',names(state.order)],['Pending recall',names(state.recall)],['Hide action',state.background?'Hide':'Minimise']]){const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=label;dd.textContent=value;$('facts').append(dt,dd);}
+ $('message').textContent=state.message;$('next').textContent=GroupModel.belongs(state)?'Next: hide group':'Next: bring group forward';$('background').checked=state.background;
+ $('windows').replaceChildren();state.windows.forEach(w=>{const row=document.createElement('tr');for(const text of [w.name,w.visibility+(state.recall.includes(w.id)?' · saved for recall':''),w.maximized?'Maximised':'Normal']){const td=document.createElement('td');td.textContent=text;row.append(td);}const actions=document.createElement('td');actions.className='row';actions.append(button(`Focus ${w.name}`,{type:'focus',id:w.id},w.visibility!=='visible'),button(`Restore ${w.name}`,{type:'restore',id:w.id},w.visibility==='visible'),button(`Minimise ${w.name}`,{type:'minimise',id:w.id},w.visibility==='minimised'&&!state.recall.includes(w.id)),button(`${w.maximized?'Unmaximise':'Maximise'} ${w.name}`,{type:'maximize',id:w.id}),button(`Close ${w.name}`,{type:'close',id:w.id}));row.append(actions);$('windows').append(row);});
+ $('tabs').replaceChildren();scenarios.forEach((sc,i)=>{const b=document.createElement('button');b.textContent=sc.title;b.setAttribute('role','tab');b.setAttribute('aria-selected',String(i===scenario));b.id=`scenario-${i}`;b.setAttribute('aria-controls','walkthrough');b.onclick=()=>reset(i);$('tabs').append(b);});
+ const sc=scenarios[scenario];$('walkthrough').setAttribute('aria-labelledby',`scenario-${scenario}`);$('walkthrough').replaceChildren();const intro=document.createElement('p');intro.textContent=sc.description;$('walkthrough').append(intro);const steps=document.createElement('div');steps.className='steps';sc.steps.forEach((st,i)=>{const b=document.createElement('button');b.textContent=`${i<progress?'✓':i+1}. ${st.label}`;b.disabled=freePlay||i!==progress;b.className=i<progress?'done':'';b.onclick=()=>{progress++;dispatch(st.action,true);};steps.append(b);});$('walkthrough').append(steps);const hint=document.createElement('small');hint.textContent=freePlay?'Free play changed the setup. Select a scenario tab to restart a walkthrough.':progress===sc.steps.length?'Walkthrough complete. Keep exploring, or select another scenario.':'Each scenario tab resets the demo. Follow its buttons in order.';$('walkthrough').append(hint);
+ $('history').replaceChildren();history.slice(0,12).forEach(text=>{const li=document.createElement('li');li.textContent=text;$('history').append(li);});
+}
+$('toggle').onclick=()=>dispatch({type:'toggle'});$('external').onclick=()=>dispatch({type:'outside',id:'external'});$('other-vault').onclick=()=>dispatch({type:'outside',id:'other-vault'});$('new-note').onclick=()=>dispatch({type:'open',kind:'note'});$('settings').onclick=()=>dispatch({type:'open',kind:'settings'});$('reset').onclick=()=>reset();$('background').onchange=e=>dispatch({type:'background',value:e.target.checked});render();
+</script>
+</html>
