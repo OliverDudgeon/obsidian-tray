@@ -127,6 +127,8 @@ These tests use temporary profiles and do not open an Obsidian vault. They check
 relaunch, canceled window closes, and the fallback for a stalled quit across real
 Electron processes. The group scenario also checks native pop-out discovery,
 focus restoration, partial recall, and independent minimisation on the host OS.
+The merge regression closes a pop-out renderer before opening Settings, verifying
+that workspace window tracking never retains proxies from the closed renderer.
 On macOS, the stacking regression uses Swift (Xcode command-line tools) to open
 a separate native application and verify that every recalled vault window is
 above it in the actual OS window order.

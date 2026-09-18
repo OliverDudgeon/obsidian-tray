@@ -67,9 +67,17 @@ export const getWindows = (): ElectronWindow[] =>
 // Obsidian exposes the native window on each workspace container's DOM window.
 // Seed existing pop-outs on layout-ready, and classify note windows for fallback.
 export const observeNoteWindow = (domWindow: Window): void => {
-	const win = (domWindow as Window & { electronWindow?: ElectronWindow }).electronWindow;
+	if (!trackWindow) return;
+	const nativeId = (domWindow as Window & { electronWindow?: { id: number } })
+		.electronWindow?.id;
+	if (nativeId === undefined) return;
+	// A pop-out's remote proxy belongs to its renderer. Keeping it after a
+	// merge makes even isDestroyed() throw once that context is released.
+	// Resolve the ID here so all listeners and references belong to this
+	// renderer, and did-create-window/workspace events share one proxy.
+	const win = electronRemote.BrowserWindow.fromId(nativeId);
 	if (!win || win.isDestroyed()) return;
-	trackWindow?.(win);
+	trackWindow(win);
 	noteWindows.add(win);
 };
 

@@ -13,12 +13,35 @@ if (process.argv.includes("--tray-group-root")) {
 	window.addEventListener("DOMContentLoaded", async () => {
 		try {
 			manager.observeWindows(plugin);
-			window.open("about:blank", "note");
+			const noteDom = window.open("about:blank", "note");
+			if (process.env.TRAY_SCENARIO === "merge") {
+				await pause();
+				noteDom.electronWindow = noteDom.require(process.env.TRAY_REMOTE_PATH).getCurrentWindow();
+				manager.observeNoteWindow(noteDom);
+				assert.equal(manager.getWindows().length, 2, "workspace and creation events share one native window");
+				// Moving the last leaf back closes its pop-out renderer in Obsidian.
+				noteDom.close();
+				await pause();
+				window.open("about:blank", "settings");
+				await pause();
+				const members = manager.getWindows();
+				assert.equal(members.length, 2, "only main and Settings survive the merge");
+				const settings = members[1];
+				remote.app.focus({ steal: true }); settings.show(); settings.focus(); await pause();
+				manager.toggleWindows(plugin); await pause();
+				assert.ok(members.every(win => !win.isVisible()));
+				manager.toggleWindows(plugin); await pause();
+				assert.ok(members.every(win => win.isVisible()));
+				assert.ok(settings.isFocused());
+				disposers.forEach(fn => fn());
+				report("merge transitions passed"); remote.app.exit(0); return;
+			}
 			if (process.env.TRAY_SCENARIO !== "stacking") window.open("about:blank", "settings");
 			await pause();
 			const [main, note, settings = note] = manager.getWindows();
 			assert.equal(manager.getWindows().length, process.env.TRAY_SCENARIO === "stacking" ? 2 : 3, "discovers native pop-outs");
-			manager.observeNoteWindow({ electronWindow: note });
+			noteDom.electronWindow = noteDom.require(process.env.TRAY_REMOTE_PATH).getCurrentWindow();
+			manager.observeNoteWindow(noteDom);
 			remote.app.focus({ steal: true });
 			settings.show(); settings.focus(); await pause();
 			assert.equal(settings.isFocused(), true, "native test acquires initial focus");

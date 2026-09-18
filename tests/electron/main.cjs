@@ -3,7 +3,7 @@ const { app, BrowserWindow, ipcMain } = require("electron");
 const fs = require("node:fs");
 const path = require("node:path");
 const { spawn, execFileSync } = require("node:child_process");
-const isGroup = ["group", "stacking"].includes(process.env.TRAY_SCENARIO);
+const isGroup = ["group", "stacking", "merge"].includes(process.env.TRAY_SCENARIO);
 const remoteMain = require(process.env.TRAY_REMOTE_PATH + "/main");
 remoteMain.initialize();
 const report = (message) => fs.appendFileSync(process.env.TRAY_REPORT_PATH, message + "\n");
@@ -40,6 +40,7 @@ app.whenReady().then(() => {
 	});
 	remoteMain.enable(win.webContents);
 	if (isGroup) {
+		win.webContents.on("did-create-window", child => remoteMain.enable(child.webContents));
 		win.webContents.on("preload-error", (_event, _path, error) => report(String(error)));
 		win.webContents.setWindowOpenHandler(() => ({ action: "allow", overrideBrowserWindowOptions: { webPreferences: { additionalArguments: [], backgroundThrottling: false } } }));
 	}

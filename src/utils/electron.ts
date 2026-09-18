@@ -40,6 +40,7 @@ export interface ElectronRectangle {
 }
 
 export interface ElectronWindow {
+	readonly id: number;
 	getChildWindows: () => ElectronWindow[];
 	showInactive: () => void;
 	setSkipTaskbar: (skip: boolean) => void;
@@ -69,6 +70,7 @@ export interface ElectronWindow {
 }
 
 export interface ElectronBrowserWindow {
+	fromId: (id: number) => ElectronWindow | null;
 	getAllWindows: () => ElectronWindow[];
 }
 

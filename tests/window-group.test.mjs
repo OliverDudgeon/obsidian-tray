@@ -10,7 +10,7 @@ function setup(platform, background = true) {
 	const windows = [], calls = [], timers = new Map(), dispose = [];
 	function make(name) {
 		const win = Object.assign(new EventEmitter(), {
-			name, visible: true, minimized: false, maximized: false, focused: false, destroyed: false,
+			name, id: windows.length + 1, visible: true, minimized: false, maximized: false, focused: false, destroyed: false,
 			webContents: new EventEmitter(), children: [],
 			isDestroyed() { return this.destroyed; },
 			isVisible() { return this.visible; },
@@ -38,7 +38,7 @@ function setup(platform, background = true) {
 	const display = { id: 1, workArea: { x: 0, y: 0, width: 1920, height: 1080 } };
 	runInNewContext(bundle.outputFiles[0].text, {
 		module, exports: module.exports, process: { platform },
-		require: () => ({ remote: { getCurrentWindow: () => main, app: { dock: { show() {}, hide() {} }, focus() {} }, screen: { getCursorScreenPoint: () => ({ x: 0, y: 0 }), getDisplayNearestPoint: () => display } } }),
+		require: () => ({ remote: { getCurrentWindow: () => main, BrowserWindow: { fromId: id => windows.find(w => w.id === id && !w.destroyed) ?? null }, app: { dock: { show() {}, hide() {} }, focus() {} }, screen: { getCursorScreenPoint: () => ({ x: 0, y: 0 }), getDisplayNearestPoint: () => display } } }),
 		setTimeout: fn => { const id = Symbol(); timers.set(id, fn); return id; },
 		clearTimeout: id => timers.delete(id), console: { debug() {}, error() {}, warn() {} },
 	});
@@ -141,4 +141,24 @@ test("native restore completion controls focus, and a second toggle cancels rest
 	h.toggle();
 	assert.deepEqual(h.shown(), ["main", "note", "settings"]);
 	assert.equal(h.settings.focused, true);
+});
+
+
+test("workspace windows are resolved in the owning renderer before tracking", () => {
+	const h = setup("darwin");
+	// A workspace container supplies a proxy from the pop-out's own renderer.
+	// Its native ID is portable; remote calls die when that renderer closes.
+	const foreignProxy = new Proxy({ id: h.note.id }, {
+		get(target, key) {
+			if (key === "id") return target.id;
+			throw new Error("IPC method called after context was released");
+		},
+	});
+	h.manager.observeNoteWindow({ electronWindow: foreignProxy });
+	assert.equal(h.manager.getWindows().length, 3, "one entry per native window");
+	h.note.destroy();
+	h.settings.focus(); h.toggle(); h.toggle();
+	assert.deepEqual(h.shown(), ["main", "settings"]);
+	assert.equal(h.settings.focused, true);
+	h.dispose.forEach(fn => fn());
 });
