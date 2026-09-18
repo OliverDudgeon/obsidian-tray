@@ -59,9 +59,10 @@ async function loadPlugin({ reloadAvailable = true, platform = "darwin", electro
 	class Plugin {
 		app = {
 			commands: { commands },
-			workspace: { onLayoutReady: (callback) => callback() },
+			workspace: { onLayoutReady: (callback) => callback(), iterateAllLeaves() {}, on() {} },
 		};
 		loadData() { return Promise.resolve({}); }
+		registerEvent() {}
 		addCommand() {}
 		addSettingTab() {}
 		register(callback) { disposers.push(callback); }
@@ -69,6 +70,8 @@ async function loadPlugin({ reloadAvailable = true, platform = "darwin", electro
 	const win = Object.assign(new EventEmitter(), {
 		webContents: new EventEmitter(),
 		setSkipTaskbar() {},
+		isDestroyed: () => false,
+		getChildWindows: () => [],
 		isMaximized: () => false,
 		hide: () => calls.push("hide"),
 	});

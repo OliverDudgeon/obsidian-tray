@@ -28,6 +28,7 @@ export interface ElectronApp {
 }
 
 export interface ElectronWebContents {
+	removeListener: (event: string, listener: (win: ElectronWindow) => void) => void;
 	on: (event: string, listener: (win: ElectronWindow) => void) => void;
 }
 
@@ -39,6 +40,8 @@ export interface ElectronRectangle {
 }
 
 export interface ElectronWindow {
+	getChildWindows: () => ElectronWindow[];
+	showInactive: () => void;
 	setSkipTaskbar: (skip: boolean) => void;
 	isMaximized: () => boolean;
 	isMinimized: () => boolean;

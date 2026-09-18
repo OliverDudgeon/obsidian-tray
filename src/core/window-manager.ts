@@ -28,36 +28,139 @@ const getCurrentWindow = (): ElectronWindow => electronRemote.getCurrentWindow()
 const vaultWindows = new Set<ElectronWindow>();
 const maximizedWindows = new Set<ElectronWindow>();
 let isQuittingDueToSystemShutdown = false;
+// Insertion order is least recently focused to most recently focused.
+const focusOrder = new Set<ElectronWindow>();
+const recallWindows = new Set<ElectronWindow>();
+const noteWindows = new Set<ElectronWindow>();
+const pendingMinimize = new Set<ElectronWindow>();
+let trackWindow: ((win: ElectronWindow) => void) | undefined;
+let transition = 0;
+let changingWindows = false;
+let restoringGroup = false;
+const pendingRestore = new Set<ElectronWindow>();
+const hideAfterRestore = new Map<ElectronWindow, boolean>();
+let finishRestoration: (() => void) | undefined;
+let finishShow: ReturnType<typeof setTimeout> | undefined;
+const workspaceWindows = new Set<ElectronWindow>();
 
-export const getWindows = (): ElectronWindow[] => [...vaultWindows];
+const isShown = (win: ElectronWindow): boolean =>
+	!win.isDestroyed() && win.isVisible() && !win.isMinimized();
+
+const cancelTransition = (): number => {
+	transition++;
+	if (finishShow !== undefined) clearTimeout(finishShow);
+	finishShow = undefined;
+	for (const win of workspaceWindows) {
+		if (!win.isDestroyed()) win.setVisibleOnAllWorkspaces(false);
+	}
+	workspaceWindows.clear();
+	changingWindows = false;
+	restoringGroup = false;
+	pendingRestore.clear();
+	finishRestoration = undefined;
+	return transition;
+};
+
+export const getWindows = (): ElectronWindow[] =>
+	[...vaultWindows].filter((win) => !win.isDestroyed());
+
+// Obsidian exposes the native window on each workspace container's DOM window.
+// Seed existing pop-outs on layout-ready, and classify note windows for fallback.
+export const observeNoteWindow = (domWindow: Window): void => {
+	const win = (domWindow as Window & { electronWindow?: ElectronWindow }).electronWindow;
+	if (!win || win.isDestroyed()) return;
+	trackWindow?.(win);
+	noteWindows.add(win);
+};
 
 export const setQuittingFlag = (flag: boolean): void => {
 	isQuittingDueToSystemShutdown = flag;
 };
 
-export const observeWindows = (plugin: TrayPlugin): void => {
+export const observeWindows = (plugin: TrayPlugin & { register: (cleanup: () => void) => void }): void => {
+	const disposers: (() => void)[] = [];
+	const listen = (win: ElectronWindow, event: string, callback: () => void) => {
+		win.on(event, callback);
+		disposers.push(() => { if (!win.isDestroyed()) win.removeListener(event, callback); });
+	};
 	const onWindowCreation = (win: ElectronWindow) => {
+		if (vaultWindows.has(win) || win.isDestroyed()) return;
 		vaultWindows.add(win);
+		focusOrder.add(win);
 		win.setSkipTaskbar(plugin.settings.hideTaskbarIcon);
 
 		// A close request can be canceled by close-to-tray or another handler.
 		// Keep the window available to Show vault until it is actually closed.
-		win.on("closed", () => {
+		listen(win, "closed", () => {
 			vaultWindows.delete(win);
 			maximizedWindows.delete(win);
+			focusOrder.delete(win);
+			noteWindows.delete(win);
+			pendingMinimize.delete(win);
+			pendingRestore.delete(win);
+			hideAfterRestore.delete(win);
+			if (!pendingRestore.size) finishRestoration?.();
+			recallWindows.delete(win);
 		});
 
 		// preserve maximised windows after minimisation
 		if (win.isMaximized()) {
 			maximizedWindows.add(win);
 		}
-		win.on("maximize", () => maximizedWindows.add(win));
-		win.on("unmaximize", () => maximizedWindows.delete(win));
+		listen(win, "maximize", () => { maximizedWindows.add(win); });
+		listen(win, "unmaximize", () => {
+			if (!changingWindows && !win.isMinimized()) maximizedWindows.delete(win);
+		});
+		listen(win, "focus", () => {
+			// Remote notifications can arrive after our calls return. Check the
+			// actual state as well as the transition guard before accepting them.
+			if (changingWindows || !isShown(win) || !win.isFocused()) return;
+			focusOrder.delete(win);
+			focusOrder.add(win);
+			recallWindows.delete(win);
+		});
+		listen(win, "minimize", () => {
+			if (pendingMinimize.delete(win)) return;
+			if (win.isMinimized()) recallWindows.delete(win);
+		});
+		listen(win, "restore", () => {
+			const hide = hideAfterRestore.get(win);
+			if (hide !== undefined) {
+				hideAfterRestore.delete(win);
+				if (hide) win.hide();
+				else {
+					pendingMinimize.add(win);
+					win.minimize();
+				}
+				return;
+			}
+			pendingRestore.delete(win);
+			if (!pendingRestore.size) finishRestoration?.();
+			if (!changingWindows && !win.isMinimized()) recallWindows.delete(win);
+		});
+		win.webContents.on("did-create-window", onWindowCreation);
+		disposers.push(() => {
+			if (!win.isDestroyed()) win.webContents.removeListener("did-create-window", onWindowCreation);
+		});
+		for (const child of win.getChildWindows()) onWindowCreation(child);
 	};
 
+	trackWindow = onWindowCreation;
 	const currentWindow = getCurrentWindow();
 	onWindowCreation(currentWindow);
-	currentWindow.webContents.on("did-create-window", onWindowCreation);
+	noteWindows.add(currentWindow);
+	plugin.register(() => {
+		cancelTransition();
+		for (const dispose of disposers) dispose();
+		vaultWindows.clear();
+		focusOrder.clear();
+		recallWindows.clear();
+		maximizedWindows.clear();
+		noteWindows.clear();
+		pendingMinimize.clear();
+		hideAfterRestore.clear();
+		trackWindow = undefined;
+	});
 
 	if (process.platform === "darwin") {
 		// On macOS, the "hide taskbar icon" option is implemented via
@@ -67,7 +170,7 @@ export const observeWindows = (plugin: TrayPlugin): void => {
 		// any other open vaults that don't have the option enabled. This
 		// listener re-hides the dock when refocusing a vault with the option
 		// enabled.
-		currentWindow.on("focus", () => {
+		listen(currentWindow, "focus", () => {
 			if (plugin.settings.hideTaskbarIcon) {
 				electronRemote.app.dock.hide();
 			}
@@ -114,100 +217,125 @@ const positionOnCursorDisplay = (
 
 export const showWindows = (): void => {
 	logger.info(LOG_SHOWING_WINDOWS);
+	const generation = cancelTransition();
+	const ordered = [...focusOrder].filter((win) => !win.isDestroyed());
+	let selected = ordered.filter((win) => isShown(win) || recallWindows.has(win));
+	if (!selected.length) {
+		// Prefer the most recently used note when everything was independently
+		// hidden/minimized. Never recreate a destroyed window.
+		const fallback = [...ordered].reverse().find((win) => noteWindows.has(win))
+			?? ordered[ordered.length - 1];
+		if (fallback) selected = [fallback];
+	}
+	if (!selected.length) return;
 	const isDarwin = process.platform === "darwin";
+	changingWindows = true;
+	restoringGroup = true;
 	if (isDarwin) electronRemote.app.dock.show();
-
-	getWindows().forEach((win) => {
-		if (isDarwin) {
-			// macOS Spaces won't pull a window across to the current desktop on a
-			// plain `show()` — instead the system follows the window. Briefly
-			// marking it visible on all workspaces forces it onto the active
-			// Space; a position change after the toggle is needed to make AppKit
-			// recompute its Space membership.
-			const isMaximized = maximizedWindows.has(win);
-			const bounds = win.getBounds();
-			// Move the window to the display the cursor is on so it follows the
-			// user across monitors. Falls back to its current position when it is
-			// already on that display.
-			const target = positionOnCursorDisplay(bounds);
-
-			// Position the window before showing it. Showing first would flash
-			// the window at its old position/monitor for a frame before the
-			// move; positioning while still hidden makes its first paint land in
-			// the final spot.
-			win.setPosition(target.x, target.y);
-			win.setVisibleOnAllWorkspaces(true);
-			win.show();
-
-			setTimeout(() => {
-				if (win.isDestroyed()) return;
-				win.setVisibleOnAllWorkspaces(false);
-				// A one-pixel nudge guarantees a position change (forcing the Space
-				// recompute) even when the window stays on the same display. Done at
-				// the target position, so it is not visible.
-				win.setPosition(target.x + 1, target.y + 1);
+	const positions = new Map<ElectronWindow, { x: number; y: number }>();
+	try {
+		for (const win of selected) {
+			hideAfterRestore.delete(win);
+			if (isDarwin) {
+				const target = positionOnCursorDisplay(win.getBounds());
+				positions.set(win, target);
 				win.setPosition(target.x, target.y);
-				win.focus();
-				win.moveTop();
-				// Bring the app itself to the foreground. Without this the
-				// previously-active app (often on the Space the hotkey was pressed
-				// from) keeps focus and renders Obsidian behind it.
-				electronRemote.app.focus({ steal: true });
-				// Re-maximize after positioning so the window fills the cursor's
-				// display rather than its original one.
-				if (isMaximized) win.maximize();
-			}, 30);
-		} else {
-			if (win.isMinimized()) win.restore();
-			if (maximizedWindows.has(win)) {
-				win.maximize();
-				win.focus();
-			} else {
-				win.show();
+				win.setVisibleOnAllWorkspaces(true);
+				workspaceWindows.add(win);
 			}
+			if (win.isMinimized()) {
+				pendingRestore.add(win);
+				win.restore();
+			}
+			win.showInactive();
 		}
-	});
+		const finish = () => {
+			if (generation !== transition) return;
+			try {
+				const surviving = selected.filter(isShown);
+				// macOS activation can reset the application's stacking order.
+				// Activate before raising the group, otherwise only the final
+				// focused window reliably clears the previously active app.
+				if (isDarwin && surviving.length) electronRemote.app.focus({ steal: true });
+				for (const win of surviving) {
+					const target = positions.get(win);
+					if (target) {
+						win.setVisibleOnAllWorkspaces(false);
+						workspaceWindows.delete(win);
+						win.setPosition(target.x + 1, target.y + 1);
+						win.setPosition(target.x, target.y);
+					}
+					if (maximizedWindows.has(win)) win.maximize();
+					win.moveTop();
+				}
+				const target = surviving[surviving.length - 1];
+				if (target) {
+					target.focus();
+				}
+			} finally {
+				cancelTransition();
+			}
+		};
+		for (const win of selected) recallWindows.delete(win);
+		finishRestoration = () => {
+			finishRestoration = undefined;
+			if (isDarwin) finishShow = setTimeout(finish, 30);
+			else finish();
+		};
+		// Cocoa restoration is asynchronous. Moving/focusing a still-minimised
+		// window can lose the last active member of the group.
+		if (!pendingRestore.size) finishRestoration();
+	} catch (error) {
+		cancelTransition();
+		throw error;
+	}
 };
 
 export const hideWindows = (plugin: TrayPlugin): void => {
 	logger.info(LOG_HIDING_WINDOWS);
-	getWindows().forEach((win, index) => {
-		const isFocused = win.isFocused();
-		const action = plugin.settings.runInBackground ? "hide" : "minimize";
-		logger.verbose(`Hiding window ${index + 1}`, {
-			focused: isFocused,
-			action,
-		});
-
-		if (isFocused) {
-			if (plugin.settings.runInBackground) {
-				win.hide();
-			} else {
+	const restoring = new Set(pendingRestore);
+	cancelTransition();
+	// Snapshot before hiding: native parent/child behavior and focus transfer
+	// can otherwise change which windows appear eligible halfway through.
+	const shown = [...focusOrder].filter((win) =>
+		!win.isDestroyed() && (isShown(win) || restoring.has(win)),
+	);
+	const focused = shown.find((win) => win.isFocused());
+	if (focused) {
+		focusOrder.delete(focused);
+		focusOrder.add(focused);
+	}
+	for (const win of shown) {
+		if (restoring.has(win)) hideAfterRestore.set(win, plugin.settings.runInBackground);
+		recallWindows.add(win);
+		if (win.isMaximized()) maximizedWindows.add(win);
+	}
+	changingWindows = true;
+	try {
+		for (const win of shown.reverse()) {
+			if (win.isDestroyed()) continue;
+			if (plugin.settings.runInBackground) win.hide();
+			else {
+				pendingMinimize.add(win);
 				win.minimize();
 			}
 		}
-	});
+	} finally {
+		changingWindows = false;
+	}
 };
 
 export const toggleWindows = (
 	plugin: TrayPlugin,
 	checkForFocus = true,
 ): void => {
-	const openWindows = getWindows().some((win) => {
-		return (!checkForFocus || win.isFocused()) && win.isVisible();
-	});
-	logger.verbose("Toggle windows", {
-		checkForFocus,
-		hasOpenWindows: openWindows,
-		windowCount: getWindows().length,
-	});
-	if (openWindows) {
-		logger.debug("Toggle: Hiding windows");
-		hideWindows(plugin);
-	} else {
-		logger.debug("Toggle: Showing windows");
-		showWindows();
-	}
+	const hasOpenWindows = getWindows().some((win) =>
+		isShown(win) && (!checkForFocus || win.isFocused()),
+	);
+	// A second press during macOS restoration should hide, not queue a
+	// second restoration before the first one has acquired focus.
+	if (hasOpenWindows || restoringGroup) hideWindows(plugin);
+	else showWindows();
 };
 
 const onWindowClose = (event: Event): void => {

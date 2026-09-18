@@ -13,6 +13,7 @@ import {
 } from "./utils/electron";
 import {
 	observeWindows,
+	observeNoteWindow,
 	showWindows,
 	hideWindows,
 	toggleWindows,
@@ -80,6 +81,10 @@ export default class TrayPlugin extends Plugin {
 		await this.loadSettings();
 
 		observeWindows(this);
+		this.app.workspace.onLayoutReady(() => {
+			this.app.workspace.iterateAllLeaves((leaf) => observeNoteWindow(leaf.getContainer().win));
+		});
+		this.registerEvent(this.app.workspace.on("window-open", (_container, win) => observeNoteWindow(win)));
 		handleSystemShutdown();
 
 		this.setLaunchOnStartup();

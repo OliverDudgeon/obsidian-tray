@@ -125,7 +125,11 @@ ELECTRON_TEST_BINARY=/path/to/electron ELECTRON_REMOTE_PATH=/path/to/@electron/r
 
 These tests use temporary profiles and do not open an Obsidian vault. They check
 relaunch, canceled window closes, and the fallback for a stalled quit across real
-Electron processes.
+Electron processes. The group scenario also checks native pop-out discovery,
+focus restoration, partial recall, and independent minimisation on the host OS.
+On macOS, the stacking regression uses Swift (Xcode command-line tools) to open
+a separate native application and verify that every recalled vault window is
+above it in the actual OS window order.
 
 ### Project structure
 
@@ -144,6 +148,27 @@ src/
 │   └── platform.ts          # macOS vs other platform terminology
 └── main.ts                  # plugin entry / public API
 ```
+
+## Group toggle behaviour
+
+The focus hotkey toggles this vault's windows together, including popped-out notes
+and Settings. When any member has focus, visible windows are hidden (or minimised
+when Run in background is disabled). From another app or vault, the hotkey brings
+this vault forward in its remembered focus order, with the last active member on top.
+
+Windows minimised independently stay minimised. Closed windows are skipped.
+Restoring one window independently does not discard the remaining group's recall
+state. If nothing is visible or saved for recall, the most recently used surviving
+note window is restored. The tray's Show and Hide actions use the same group rules.
+
+Focus history approximates stacking order; the operating system can impose parent,
+fullscreen, or always-on-top constraints. Existing macOS display/Space movement
+still applies when bringing the group forward.
+
+The interactive design prototype is preserved on branch
+`prototype/vault-group-toggle`, at `src/core/window-group.prototype.html`
+(commit `dde501d`). The group interaction rules were accepted for implementation;
+the prototype is not part of the production plugin.
 
 ## Disclaimer
 

@@ -3,8 +3,9 @@ const remote = require(process.env.TRAY_REMOTE_PATH);
 const Module = require("node:module");
 const load = Module._load;
 class Plugin {
-	app = { commands: { commands: {} }, workspace: { onLayoutReady: (fn) => fn() } };
+	app = { commands: { commands: {} }, workspace: { onLayoutReady: (fn) => fn(), iterateAllLeaves() {}, on() {} } };
 	loadData() { return Promise.resolve({}); }
+	registerEvent() {}
 	addCommand() {}
 	addSettingTab() {}
 	register() {}
