@@ -11,6 +11,7 @@ import {
 	OBSIDIAN_BASE64_ICON,
 } from "../utils/constants";
 import { replaceVaultName } from "../core/tray-manager";
+import { acceleratorFromEvent } from "../utils/accelerator";
 
 interface ObsidianApp {
 	vault: {
@@ -97,6 +98,10 @@ export class SettingsTab extends PluginSettingTab {
 	}
 
 	display() {
+		// Global shortcuts fire even while Obsidian has focus, so a hotkey
+		// pressed in settings would trigger its action instead of being recorded.
+		this.plugin.unregisterHotkeys();
+
 		const { containerEl } = this;
 		containerEl.empty();
 
@@ -145,14 +150,40 @@ export class SettingsTab extends PluginSettingTab {
 						if (onChange) onChange();
 					});
 				});
+			} else if (type === "hotkey") {
+				const current = this.plugin.settings[key];
+				const fallback =
+					typeof defaultValue === "string" ? defaultValue : "";
+				const initial = typeof current === "string" ? current : fallback;
+				let hotkeyInput: HTMLInputElement;
+				setting.addText((text) => {
+					hotkeyInput = text.inputEl;
+					text.setPlaceholder("Press a hotkey").setValue(initial);
+					text.inputEl.readOnly = true;
+					text.inputEl.addEventListener("keydown", (event) => {
+						event.preventDefault();
+						const accelerator = acceleratorFromEvent(event);
+						if (!accelerator) return;
+						text.setValue(accelerator);
+						void setStringValue(accelerator);
+					});
+				});
+				setting.addExtraButton((button) =>
+					button
+						.setIcon("cross")
+						.setTooltip("Clear hotkey")
+						.onClick(() => {
+							hotkeyInput.value = "";
+							void setStringValue("");
+						}),
+				);
 			} else {
 				const current = this.plugin.settings[key];
 				const fallback =
 					typeof defaultValue === "string" ? defaultValue : "";
 				const initial = typeof current === "string" ? current : fallback;
 				setting.addText((text) => {
-					if (type === "hotkey") text.setPlaceholder("e.g. CmdOrCtrl+Shift+O");
-					else if (type === "image")
+					if (type === "image")
 						text.setPlaceholder("Data URL or file path");
 					else if (type === "moment") text.setPlaceholder(DEFAULT_DATE_FORMAT);
 					else if (placeholder) text.setPlaceholder(placeholder);
@@ -186,6 +217,11 @@ export class SettingsTab extends PluginSettingTab {
 				}
 			}
 		}
+	}
+
+	hide() {
+		this.plugin.registerHotkeys();
+		super.hide();
 	}
 
 	getSettingsOptions(): SettingEntry[] {
@@ -283,8 +319,6 @@ export class SettingsTab extends PluginSettingTab {
 				desc: ACCELERATOR_FORMAT,
 				type: "hotkey",
 				default: "CmdOrCtrl+Shift+Tab",
-				onBeforeChange: () => this.plugin.unregisterHotkeys(),
-				onChange: () => this.plugin.registerHotkeys(),
 			},
 			"Quick notes",
 			{
@@ -311,8 +345,6 @@ export class SettingsTab extends PluginSettingTab {
 				desc: ACCELERATOR_FORMAT,
 				type: "hotkey",
 				default: "CmdOrCtrl+Shift+Q",
-				onBeforeChange: () => this.plugin.unregisterHotkeys(),
-				onChange: () => this.plugin.registerHotkeys(),
 			},
 		];
 	}
